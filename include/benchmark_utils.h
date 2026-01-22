@@ -80,6 +80,18 @@ struct ConvBuffers {
   ConvBuffers& operator=(const ConvBuffers&) = delete;
 };
 
+bool compare_outputs(const float* output1, const float* output2, size_t size,
+                     float tol = 1e-3f) {
+  bool all_close = true;
+  for (size_t i = 0; i < size; i++) {
+    if (fabs(output1[i] - output2[i]) > tol) {
+      printf("Mismatch at index %zu: %f vs %f\n", i, output1[i], output2[i]);
+      all_close = false;
+    }
+  }
+  return all_close;
+}
+
 // Timing result with breakdown
 struct TimingResult {
   float h2d_time;     // Host to Device transfer
@@ -104,7 +116,7 @@ struct TimingResult {
 // Time a GPU convolution with full memory transfer
 template <typename Func>
 TimingResult time_gpu_convolution(Func conv_func, ConvBuffers& buffers,
-                                  int warmup_iters = 5, int timing_iters = 20) {
+                                  int warmup_iters = 3, int timing_iters = 10) {
   TimingResult result = {0, 0, 0, 0};
 
   cudaEvent_t start, stop;
@@ -129,6 +141,7 @@ TimingResult time_gpu_convolution(Func conv_func, ConvBuffers& buffers,
 
   // Timed runs
   for (int i = 0; i < timing_iters; i++) {
+    printf("Iteration %d/%d\r", i + 1, timing_iters);
     float h2d, kernel, d2h;
 
     // Time H2D transfer

@@ -20,8 +20,8 @@ void conv_forward(const float* input,   // [N, C, H, W]
                   const float* kernel,  // [K, C, R, S]
                   float* output,        // [N, K, out_h, out_w]
                   const ConvParams& params) {
-  int out_h = params.out_h();
-  int out_w = params.out_w();
+  size_t out_h = params.out_h();
+  size_t out_w = params.out_w();
 
   for (size_t n = 0; n < params.N; n++) {
     for (size_t k = 0; k < params.K; k++) {
@@ -31,10 +31,10 @@ void conv_forward(const float* input,   // [N, C, H, W]
           for (size_t c = 0; c < params.C; c++) {
             for (size_t r = 0; r < params.R; r++) {
               for (size_t s = 0; s < params.S; s++) {
-                int in_h = p * params.stride - params.pad + r;
-                int in_w = q * params.stride - params.pad + s;
-                if (in_h >= 0 && in_h < params.H && in_w >= 0 &&
-                    in_w < params.W) {
+                int in_h = (int)(p * params.stride) - (int)params.pad + (int)r;
+                int in_w = (int)(q * params.stride) - (int)params.pad + (int)s;
+                if (in_h >= 0 && in_h < (int)params.H && in_w >= 0 &&
+                    in_w < (int)params.W) {
                   sum += input(n, c, in_h, in_w) * kernel(k, c, r, s);
                 }
               }

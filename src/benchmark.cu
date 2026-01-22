@@ -1,3 +1,5 @@
+#include <string>
+
 #include "benchmark_utils.h"
 #include "conv_interface.h"
 
@@ -28,30 +30,55 @@ int main() {
   // Allocate all buffers once (via RAII)
   ConvBuffers buffers(params);
 
-  printf("Convolution: N=%d, C=%d, H=%d×%d, K=%d, Kernel=%dx%d\n", params.N,
-         params.C, params.H, params.W, params.K, params.R, params.S);
-  printf("Output: %d×%d, Total FLOPs: %.2f GFLOP\n\n", params.out_h(),
+  printf("Convolution: N=%zd, C=%zd, H=%zd×%zd, K=%zd, Kernel=%zdx%zd\n",
+         params.N, params.C, params.H, params.W, params.K, params.R, params.S);
+  printf("Output: %zd×%zd, Total FLOPs: %.2f GFLOP\n\n", params.out_h(),
          params.out_w(),
          calculate_gflops(params, 1000.0f));  // GFLOPS at 1 second
 
   // Benchmark CPU
   auto cpu_result = time_cpu_convolution(cpu::conv_forward, buffers);
   cpu_result.print("CPU Baseline");
+  float* cpu_output = new float[params.output_size()];
+  memcpy(cpu_output, buffers.h_output, params.output_size() * sizeof(float));
 
   // Benchmark GPU implementations
   auto naive_result = time_gpu_convolution(naive::conv_forward, buffers);
   naive_result.print("CUDA Naive", cpu_result.total_time);
+  float* gpu_naive_output = new float[params.output_size()];
+  memcpy(gpu_naive_output, buffers.h_output,
+         params.output_size() * sizeof(float));
 
-  auto shared_result = time_gpu_convolution(shared::conv_forward, buffers);
-  shared_result.print("CUDA Shared Memory", cpu_result.total_time);
+  if (!compare_outputs(cpu_output, gpu_naive_output, params.output_size())) {
+    fprintf(stderr, "Naive GPU output does not match CPU reference!\n");
+  } else {
+    fprintf(stdout, "Naive GPU output matches CPU reference.\n");
+  }
+
+  //   auto shared_result = time_gpu_convolution(shared::conv_forward,
+  //   buffers); shared_result.print("CUDA Shared Memory",
+  //   cpu_result.total_time);
+  //   float* gpu_shared_output = new float[params.output_size()];
+  //   memcpy(gpu_shared_output, buffers.h_output,
+  //          params.output_size() * sizeof(float));
+
+  //   if (!compare_outputs(cpu_output, gpu_shared_output,
+  //   params.output_size())) {
+  //     printf("Shared GPU output does not match CPU reference!\n");
+  //   } else {
+  //     printf("Shared GPU output matches CPU reference.\n");
+  //   }
 
   printf("\nPerformance:\n");
   printf("  CPU:    %.2f GFLOPS\n",
          calculate_gflops(params, cpu_result.total_time));
   printf("  Naive:  %.2f GFLOPS\n",
          calculate_gflops(params, naive_result.kernel_time));
-  printf("  Shared: %.2f GFLOPS\n",
-         calculate_gflops(params, shared_result.kernel_time));
+  //   printf("  Shared: %.2f GFLOPS\n",
+  //          calculate_gflops(params, shared_result.kernel_time));
+
+  delete[] cpu_output;
+  delete[] gpu_naive_output;
 
   return 0;
 }
