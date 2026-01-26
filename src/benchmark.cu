@@ -13,6 +13,12 @@ void conv_forward(const float*, const float*, float*, const ConvParams&);
 namespace shared {
 void conv_forward(const float*, const float*, float*, const ConvParams&);
 }
+namespace shared_both {
+void conv_forward(const float*, const float*, float*, const ConvParams&);
+}
+namespace what {
+void conv_forward(const float*, const float*, float*, const ConvParams&);
+}
 
 int main() {
   // Define problem size
@@ -38,47 +44,72 @@ int main() {
 
   // Benchmark CPU
   auto cpu_result = time_cpu_convolution(cpu::conv_forward, buffers);
-  cpu_result.print("CPU Baseline");
   float* cpu_output = new float[params.output_size()];
   memcpy(cpu_output, buffers.h_output, params.output_size() * sizeof(float));
 
-  // Benchmark GPU implementations
+  // Unoptimized GPU implementations
   auto naive_result = time_gpu_convolution(naive::conv_forward, buffers);
-  naive_result.print("CUDA Naive", cpu_result.total_time);
-  float* gpu_naive_output = new float[params.output_size()];
-  memcpy(gpu_naive_output, buffers.h_output,
+  float* naive_output = new float[params.output_size()];
+  memcpy(naive_output, buffers.h_output, params.output_size() * sizeof(float));
+
+  printf("Comparing naive output to CPU reference...\n");
+  compare_outputs(cpu_output, naive_output, params.output_size());
+
+  // Shared GPU implementations
+  auto shared_result =
+      time_gpu_convolution(shared::conv_forward, buffers, true);
+  float* shared_output = new float[params.output_size()];
+  memcpy(shared_output, buffers.h_output, params.output_size() * sizeof(float));
+
+  printf("Comparing shared output to CPU reference...\n");
+  compare_outputs(cpu_output, shared_output, params.output_size());
+
+  // Shared_both GPU implementations
+  auto shared_both_result =
+      time_gpu_convolution(shared_both::conv_forward, buffers, true);
+  float* shared_both_output = new float[params.output_size()];
+  memcpy(shared_both_output, buffers.h_output,
          params.output_size() * sizeof(float));
 
-  if (!compare_outputs(cpu_output, gpu_naive_output, params.output_size())) {
-    fprintf(stderr, "Naive GPU output does not match CPU reference!\n");
-  } else {
-    fprintf(stdout, "Naive GPU output matches CPU reference.\n");
-  }
+  printf("Comparing shared_both output to CPU reference...\n");
+  compare_outputs(cpu_output, shared_both_output, params.output_size());
 
-  //   auto shared_result = time_gpu_convolution(shared::conv_forward,
-  //   buffers); shared_result.print("CUDA Shared Memory",
-  //   cpu_result.total_time);
-  //   float* gpu_shared_output = new float[params.output_size()];
-  //   memcpy(gpu_shared_output, buffers.h_output,
-  //          params.output_size() * sizeof(float));
+  // cuDNN implementations
+  auto cudnn_result = time_cudnn_convolution(buffers);
+  float* cudnn_output = new float[params.output_size()];
+  memcpy(cudnn_output, buffers.h_output, params.output_size() * sizeof(float));
 
-  //   if (!compare_outputs(cpu_output, gpu_shared_output,
-  //   params.output_size())) {
-  //     printf("Shared GPU output does not match CPU reference!\n");
-  //   } else {
-  //     printf("Shared GPU output matches CPU reference.\n");
-  //   }
+  printf("Comparing cuDNN output to CPU reference...\n");
+  compare_outputs(cpu_output, cudnn_output, params.output_size());
+
+  //////////////////////////////////////////////////////////////////////////////////////////
 
   printf("\nPerformance:\n");
+
+  // Print results
+  cpu_result.print("Baseline");
+  naive_result.print("Naive", cpu_result.total_time);
+  shared_result.print("Shared", cpu_result.total_time);
+  shared_both_result.print("Shared_both", cpu_result.total_time);
+  cudnn_result.print("cuDNN", cpu_result.total_time);
+
+  // Print GFLOPS
   printf("  CPU:    %.2f GFLOPS\n",
          calculate_gflops(params, cpu_result.total_time));
   printf("  Naive:  %.2f GFLOPS\n",
          calculate_gflops(params, naive_result.kernel_time));
-  //   printf("  Shared: %.2f GFLOPS\n",
-  //          calculate_gflops(params, shared_result.kernel_time));
+  printf("  Shared: %.2f GFLOPS\n",
+         calculate_gflops(params, shared_result.kernel_time));
+  printf("  Shared_both: %.2f GFLOPS\n",
+         calculate_gflops(params, shared_both_result.kernel_time));
+  printf("  cuDNN: %.2f GFLOPS\n",
+         calculate_gflops(params, cudnn_result.kernel_time));
 
   delete[] cpu_output;
-  delete[] gpu_naive_output;
+  delete[] naive_output;
+  delete[] shared_output;
+  delete[] shared_both_output;
+  delete[] cudnn_output;
 
   return 0;
 }

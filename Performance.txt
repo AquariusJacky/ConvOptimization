@@ -1,0 +1,11 @@
+Performance:
+Baseline                 : 5406.551 ms
+  └─ H2D: 0.000 ms, Kernel: 5406.551 ms, D2H: 0.000 ms
+Naive                    :   36.210 ms  (149.31x speedup)
+  └─ H2D: 1.225 ms, Kernel: 32.863 ms, D2H: 2.122 ms
+Shared                   :   42.387 ms  (127.55x speedup)
+  └─ H2D: 1.215 ms, Kernel: 39.041 ms, D2H: 2.132 ms
+Shared_both              :   25.351 ms  (213.26x speedup)
+  └─ H2D: 1.209 ms, Kernel: 21.992 ms, D2H: 2.151 ms
+cuDNN                    :    4.179 ms  (1293.75x speedup)
+  └─ H2D: 1.208 ms, Kernel: 0.820 ms, D2H: 2.151 ms

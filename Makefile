@@ -10,10 +10,10 @@ BUILD_DIR = build
 BIN_DIR = bin
 
 # Compiler flags
-NVCCFLAGS = -O3 --use_fast_math -arch=$(ARCH) -std=c++17
+NVCCFLAGS = -g -lineinfo -O3 --use_fast_math -arch=$(ARCH) -std=c++17
 CXXFLAGS = -O3 -std=c++17 -Wall
 INCLUDES = -I$(INC_DIR)
-LIBS = -lcudart
+LIBS = -lcudart -lcudnn
 
 # Optional: Enable line info for Nsight Compute profiling
 # Uncomment the next line when profiling
@@ -24,18 +24,11 @@ LIBS = -lcudart
 # NVCCFLAGS += -g -G
 # CXXFLAGS += -g
 
-# Optional: CUTLASS support
-# Uncomment and set path if using CUTLASS
-# CUTLASS_DIR = ./external/cutlass/include
-# INCLUDES += -I$(CUTLASS_DIR)
-# NVCCFLAGS += -DUSE_CUTLASS
-# CUTLASS_SRC = $(SRC_DIR)/conv_cutlass.cu
-
 # Source files
 CPU_SRC = $(SRC_DIR)/conv_cpu.cpp
 CUDA_SRC = $(SRC_DIR)/conv_naive.cu \
            $(SRC_DIR)/conv_shared.cu \
-           $(SRC_DIR)/conv_tiled.cu \
+           $(SRC_DIR)/conv_shared_both.cu \
            $(CUTLASS_SRC)
 MAIN_SRC = $(SRC_DIR)/benchmark.cu
 
@@ -112,6 +105,7 @@ info:
 	@echo "=== Build Configuration ==="
 	@echo "Architecture: $(ARCH)"
 	@echo "Optimization: -O3"
+	@echo "cuDNN: Enabled"
 	@echo "CUTLASS: $(if $(CUTLASS_SRC),Enabled,Disabled)"
 
 # Clean build artifacts

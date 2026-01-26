@@ -4,17 +4,17 @@
 
 namespace cpu {
 
-#define input(n, c, h, w)                                                  \
-  input[(n) * params.C * params.H * params.W + (c) * params.H * params.W + \
-        (h) * params.W + (w)]
+#define INPUT(n, c, h, w)                                                   \
+  (input[(n) * params.C * params.H * params.W + (c) * params.H * params.W + \
+         (h) * params.W + (w)])
 
-#define kernel(k, c, r, s)                                                  \
-  kernel[(k) * params.C * params.R * params.S + (c) * params.R * params.S + \
-         (r) * params.S + (s)]
+#define KERNEL(k, c, r, s)                                                   \
+  (kernel[(k) * params.C * params.R * params.S + (c) * params.R * params.S + \
+          (r) * params.S + (s)])
 
-#define output(n, k, h, w)                                  \
-  output[(n) * params.K * params.out_h() * params.out_w() + \
-         (k) * params.out_h() * params.out_w() + (h) * params.out_w() + (w)]
+#define OUTPUT(n, k, h, w)                                   \
+  (output[(n) * params.K * params.out_h() * params.out_w() + \
+          (k) * params.out_h() * params.out_w() + (h) * params.out_w() + (w)])
 
 void conv_forward(const float* input,   // [N, C, H, W]
                   const float* kernel,  // [K, C, R, S]
@@ -35,12 +35,12 @@ void conv_forward(const float* input,   // [N, C, H, W]
                 int in_w = (int)(q * params.stride) - (int)params.pad + (int)s;
                 if (in_h >= 0 && in_h < (int)params.H && in_w >= 0 &&
                     in_w < (int)params.W) {
-                  sum += input(n, c, in_h, in_w) * kernel(k, c, r, s);
+                  sum += INPUT(n, c, in_h, in_w) * KERNEL(k, c, r, s);
                 }
               }
             }
           }
-          output(n, k, p, q) = sum;
+          OUTPUT(n, k, p, q) = sum;
         }
       }
     }
