@@ -80,9 +80,7 @@ __global__ void conv_shared_kernel(const float* input, const float* kernel,
 
 /*
   @brief Convolution forward pass using shared memory optimization
-  for input tiles. Uncoalesced global memory access may be the biggest
-  optimization according to ncu. Also, since we can't fit all input channels in
-  shared memory, we have to split the channels internally during calculation.
+  for input tiles.
   @param input Pointer to input tensor [N, C, H, W]
   @param kernel Pointer to kernel tensor [K, C, R, S]
   @param output Pointer to output tensor [N, K, out_h, out_w]

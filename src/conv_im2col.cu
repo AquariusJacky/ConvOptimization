@@ -167,12 +167,7 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
 }
 
 /*
-  @brief At this point probably try out im2col + gemm approach because ncu shows
-  that the kernel is compute bound.
-  ...
-  After I learned more about im2col, I found out that the previous methods were
-  all thrown away. It's not an improvement over the previous methods, it's a
-  completely different approach. Hopefully this one will work better.
+  @brief Convolution forward pass using im2col + WMMA.
   @param input Pointer to input tensor [N, C, H, W]
   @param kernel Pointer to kernel tensor [K, C, R, S]
   @param output Pointer to output tensor [N, K, H_out, W_out]

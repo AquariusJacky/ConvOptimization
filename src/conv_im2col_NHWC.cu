@@ -214,23 +214,7 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
 }
 
 /*
-  @brief Trying out im2col with NHWC layout.
-  I am amazed by how fast im2col can be when implemented correctly.
-  This implementation is an attempt to convert the input and kernel tensors from
-  NCHW to NHWC format, then perform im2col + GEMM using WMMA.
-  This should improve memory coalescing during the im2col step.
-  The conversion kernels are simple and straightforward.
-  The main convolution kernel is similar to the previous im2col + WMMA kernel,
-  except that the indexing for input tensor is changed to NHWC format.
-  This should yield better performance due to improved memory access patterns.
-  Note that the input and kernel tensors are converted to half-precision
-  before being passed to the convolution kernel.
-  This reduces memory bandwidth requirements and speeds up computation.
-  The output tensor remains in single-precision for accuracy.
-  Overall, this approach leverages the strengths of im2col and WMMA while
-  optimizing memory access patterns through NHWC layout.
-  Hopefully, this will lead to significant performance improvements.
-  (Spoiler, it didn't)
+  @brief Convolution forward pass using im2col + WMMA + NHWC data layout.
   @param input Pointer to input tensor [N, C, H, W]
   @param kernel Pointer to kernel tensor [K, C, R, S]
   @param output Pointer to output tensor [N, K, H_out, W_out]

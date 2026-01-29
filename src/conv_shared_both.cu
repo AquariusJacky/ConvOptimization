@@ -146,10 +146,7 @@ __global__ void conv_shared_both_forward(const float* input,   // [N, C, H, W]
 
 /*
   @brief Convolution forward pass using a bigger shared memory that includes
-  both input and kernel with a 3D block shape (shared memory can't fit all K
-  kernels). Since the shared version is worse than naive, this is an attempt to
-  see if moving kernel to shared memory helps.
-  From here it's much harder to do indexing
+  both input and kernel with a 3D block shape.
   @param input Pointer to input tensor [N, C, H, W]
   @param kernel Pointer to kernel tensor [K, C, R, S]
   @param output Pointer to output tensor [N, K, out_h, out_w]
