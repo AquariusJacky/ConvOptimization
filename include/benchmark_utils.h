@@ -81,9 +81,9 @@ struct ConvBuffers {
     delete[] h_kernel;
     delete[] h_output;
 
-    cudaFree(d_input);
-    cudaFree(d_kernel);
-    cudaFree(d_output);
+    CUDA_CHECK(cudaFree(d_input));
+    CUDA_CHECK(cudaFree(d_kernel));
+    CUDA_CHECK(cudaFree(d_output));
   }
 
   // Prevent copying (expensive)
@@ -129,11 +129,39 @@ struct TimingResult {
   }
 };
 
+// Time a CPU convolution
+template <typename Func>
+TimingResult time_cpu_convolution(Func conv_func, ConvBuffers& buffers,
+                                  int warmup_iters = 2, int timing_iters = 10) {
+  TimingResult result = {0, 0, 0, 0};
+
+  // Warmup
+  for (int i = 0; i < warmup_iters; i++) {
+    conv_func(buffers.h_input, buffers.h_kernel, buffers.h_output,
+              buffers.params);
+  }
+
+  // Timed runs
+  auto start = std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < timing_iters; i++) {
+    conv_func(buffers.h_input, buffers.h_kernel, buffers.h_output,
+              buffers.params);
+  }
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<float, std::milli> duration = end - start;
+
+  result.total_time = duration.count() / timing_iters;
+  result.kernel_time = result.total_time;  // CPU has no transfer overhead
+
+  return result;
+}
+
 // Time a GPU convolution with full memory transfer
 template <typename Func>
 TimingResult time_gpu_convolution(Func conv_func, ConvBuffers& buffers,
-                                  bool use_constant_memory = false,
-                                  int warmup_iters = 3, int timing_iters = 10) {
+                                  int warmup_iters, int timing_iters) {
   TimingResult result = {0, 0, 0, 0};
 
   cudaEvent_t start, stop;
@@ -209,35 +237,6 @@ TimingResult time_gpu_convolution(Func conv_func, ConvBuffers& buffers,
   return result;
 }
 
-// Time a CPU convolution
-template <typename Func>
-TimingResult time_cpu_convolution(Func conv_func, ConvBuffers& buffers,
-                                  int warmup_iters = 2, int timing_iters = 10) {
-  TimingResult result = {0, 0, 0, 0};
-
-  // Warmup
-  for (int i = 0; i < warmup_iters; i++) {
-    conv_func(buffers.h_input, buffers.h_kernel, buffers.h_output,
-              buffers.params);
-  }
-
-  // Timed runs
-  auto start = std::chrono::high_resolution_clock::now();
-
-  for (int i = 0; i < timing_iters; i++) {
-    conv_func(buffers.h_input, buffers.h_kernel, buffers.h_output,
-              buffers.params);
-  }
-
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<float, std::milli> duration = end - start;
-
-  result.total_time = duration.count() / timing_iters;
-  result.kernel_time = result.total_time;  // CPU has no transfer overhead
-
-  return result;
-}
-
 // Time a cuDNN convolution with full memory transfer
 TimingResult time_cudnn_convolution(ConvBuffers& buffers, int warmup_iters = 3,
                                     int timing_iters = 10) {
@@ -289,8 +288,8 @@ TimingResult time_cudnn_convolution(ConvBuffers& buffers, int warmup_iters = 3,
                                          out_w));
 
   // Find best algorithm
-  cudnnConvolutionFwdAlgoPerf_t perf_results;
   int returned_algo_count;
+  cudnnConvolutionFwdAlgoPerf_t perf_results;
   CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm_v7(
       cudnn, input_desc, kernel_desc, conv_desc, output_desc, 1,
       &returned_algo_count, &perf_results));

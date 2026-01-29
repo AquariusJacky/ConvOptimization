@@ -23,6 +23,8 @@ struct ConvParams {
   size_t stride;  // Stride
 
   // Computed output dimensions
+  // Because (out_h - 1) * stride + R = (H + (2 * pad)) = original size possibly
+  // with padding
   size_t out_h() const { return (H + 2 * pad - R) / stride + 1; }
   size_t out_w() const { return (W + 2 * pad - S) / stride + 1; }
 

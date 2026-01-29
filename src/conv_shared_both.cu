@@ -14,11 +14,12 @@ namespace shared_both {
 
 // Forward convolution kernel with shared memory tiling and register blocking
 __global__ void conv_shared_both_forward(const float* input,   // [N, C, H, W]
-                             const float* kernel,  // [K, C, R, S]
-                             float* output,        // [N, K, H_out, W_out]
-                             size_t N, size_t C, size_t H, size_t W, size_t K,
-                             size_t R, size_t S, size_t pad, size_t stride,
-                             size_t H_out, size_t W_out) {
+                                         const float* kernel,  // [K, C, R, S]
+                                         float* output,  // [N, K, H_out, W_out]
+                                         size_t N, size_t C, size_t H, size_t W,
+                                         size_t K, size_t R, size_t S,
+                                         size_t pad, size_t stride,
+                                         size_t H_out, size_t W_out) {
   // Block indices
   size_t bx = blockIdx.x;
   size_t by = blockIdx.y;

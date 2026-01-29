@@ -6,9 +6,9 @@
 namespace naive {
 
 __global__ void conv_naive_kernel(const float* input, const float* kernel,
-                            float* output, size_t N, size_t C, size_t H,
-                            size_t W, size_t K, size_t R, size_t S, size_t pad,
-                            size_t stride) {
+                                  float* output, size_t N, size_t C, size_t H,
+                                  size_t W, size_t K, size_t R, size_t S,
+                                  size_t pad, size_t stride) {
   size_t bz = blockIdx.z;
   size_t by = blockDim.y * blockIdx.y;
   size_t bx = blockDim.x * blockIdx.x;
@@ -53,8 +53,8 @@ void conv_forward(const float* input, const float* kernel, float* output,
             (params.out_h() + block.y - 1) / block.y, params.N * params.K);
 
   conv_naive_kernel<<<grid, block>>>(input, kernel, output, params.N, params.C,
-                               params.H, params.W, params.K, params.R, params.S,
-                               params.pad, params.stride);
+                                     params.H, params.W, params.K, params.R,
+                                     params.S, params.pad, params.stride);
 
   cudaError_t err = cudaGetLastError();
   if (err != cudaSuccess) {

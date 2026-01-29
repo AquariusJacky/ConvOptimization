@@ -11,9 +11,9 @@ namespace shared {
 
 // To solve coalescing issues, adjacent threads will load adjacent elements
 __global__ void conv_shared_kernel(const float* input, const float* kernel,
-                            float* output, size_t N, size_t C, size_t H,
-                            size_t W, size_t K, size_t R, size_t S, size_t pad,
-                            size_t stride) {
+                                   float* output, size_t N, size_t C, size_t H,
+                                   size_t W, size_t K, size_t R, size_t S,
+                                   size_t pad, size_t stride) {
   size_t bx = blockDim.x * blockIdx.x;
   size_t by = blockDim.y * blockIdx.y;
   size_t bz = blockIdx.z;
