@@ -1,11 +1,15 @@
 Performance:
-Baseline                 : 5406.551 ms
-  └─ H2D: 0.000 ms, Kernel: 5406.551 ms, D2H: 0.000 ms
-Naive                    :   36.210 ms  (149.31x speedup)
-  └─ H2D: 1.225 ms, Kernel: 32.863 ms, D2H: 2.122 ms
-Shared                   :   42.387 ms  (127.55x speedup)
-  └─ H2D: 1.215 ms, Kernel: 39.041 ms, D2H: 2.132 ms
-Shared_both              :   25.351 ms  (213.26x speedup)
-  └─ H2D: 1.209 ms, Kernel: 21.992 ms, D2H: 2.151 ms
-cuDNN                    :    4.179 ms  (1293.75x speedup)
-  └─ H2D: 1.208 ms, Kernel: 0.820 ms, D2H: 2.151 ms
+Baseline                 : 5856.671 ms
+  └─ H2D: 0.000 ms, Kernel: 5856.671 ms, D2H: 0.000 ms
+Naive                    :   38.214 ms  (153.26x speedup)
+  └─ H2D: 1.412 ms, Kernel: 34.118 ms, D2H: 2.684 ms
+Shared                   :   43.885 ms  (133.46x speedup)
+  └─ H2D: 1.286 ms, Kernel: 40.310 ms, D2H: 2.288 ms
+Shared_both              :   25.714 ms  (227.77x speedup)
+  └─ H2D: 1.283 ms, Kernel: 22.050 ms, D2H: 2.381 ms
+im2col                   :    7.516 ms  (779.27x speedup)
+  └─ H2D: 1.225 ms, Kernel: 4.109 ms, D2H: 2.182 ms
+im2col_NHWC              :    5.661 ms  (1034.57x speedup)
+  └─ H2D: 1.241 ms, Kernel: 2.211 ms, D2H: 2.209 ms
+cuDNN                    :    4.237 ms  (1382.24x speedup)
+  └─ H2D: 1.235 ms, Kernel: 0.843 ms, D2H: 2.159 ms

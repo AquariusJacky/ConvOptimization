@@ -28,30 +28,13 @@ __global__ void NCHW_to_NHWC(const float* input, half* output, size_t N,
   size_t stride = blockDim.x * gridDim.x;
 
   for (size_t i = idx; i < total_elements; i += stride) {
-    // Do uncoalesced read from NCHW
-    size_t n = i / (C * W * H);
-    size_t h = (i / (C * W)) % H;
+    // Compute NHWC layout indices
+    size_t n = i / (H * W * C);
+    size_t h = (i / (W * C)) % H;
     size_t w = (i / C) % W;
     size_t c = i % C;
 
     output[i] = __float2half(input[(n)*C * H * W + (c)*H * W + (h)*W + (w)]);
-  }
-}
-
-__global__ void NHWC_to_NCHW(const half* input, float* output, size_t N,
-                             size_t H, size_t W, size_t C) {
-  size_t total_elements = N * H * W * C;
-  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-  size_t stride = blockDim.x * gridDim.x;
-
-  for (size_t i = idx; i < total_elements; i += stride) {
-    // Do uncoalesced read from NHWC
-    size_t n = i / (C * H * W);
-    size_t c = (i / (H * W)) % C;
-    size_t h = (i / W) % H;
-    size_t w = i % W;
-
-    output[i] = __half2float(input[(n)*H * W * C + (h)*W * C + (w)*C + (c)]);
   }
 }
 
@@ -66,14 +49,14 @@ __global__ void NHWC_to_NCHW(const half* input, float* output, size_t N,
 
 __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
                                          const half* kernel,  // [K, C, R, S]
-                                         half* output,  // [N, K, H_out, W_out]
+                                         float* output,  // [N, K, H_out, W_out]
                                          size_t N, size_t C, size_t H, size_t W,
                                          size_t K, size_t R, size_t S,
                                          size_t pad, size_t stride,
                                          size_t H_out, size_t W_out) {
   __shared__ half tile_kernel[TILE_SIZE][WMMA_K];
   __shared__ half tile_im2col[WMMA_K][TILE_SIZE];
-  __shared__ half tile_output[TILE_SIZE][TILE_SIZE];  // NEW: output buffer
+  __shared__ half tile_output[TILE_SIZE][TILE_SIZE];
 
   int warpId = threadIdx.x / 32;
   int warp_row = (warpId / 2) * WARP_TILE_SIZE;
@@ -96,7 +79,7 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
   for (int i = 0; i < 2; i++) {
 #pragma unroll
     for (int j = 0; j < 2; j++) {
-      fill_fragment(c_frag[i][j], 0.0f);
+      nvcuda::wmma::fill_fragment(c_frag[i][j], 0.0f);
     }
   }
 
@@ -106,7 +89,7 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
   for (int k_block = 0; k_block < CRS; k_block += WMMA_K) {
 // Load kernel tile
 #pragma unroll
-    for (int idx = 0; idx < (TILE_SIZE * WMMA_K); idx += BLOCK_SIZE) {
+    for (int idx = threadIdx.x; idx < (TILE_SIZE * WMMA_K); idx += BLOCK_SIZE) {
       int tile_row = idx / WMMA_K;
       int tile_col = idx % WMMA_K;
 
@@ -114,15 +97,24 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
       int crs_idx = k_block + tile_col;
 
       if (k_out < K && crs_idx < CRS) {
-        tile_kernel[tile_row][tile_col] = kernel[k_out * CRS + crs_idx];
+        // Decompose crs_idx into c, r, s
+        int c = crs_idx / (R * S);
+        int rs = crs_idx % (R * S);
+        int r = rs / S;
+        int s = rs % S;
+
+        // KRSC: recompose as k, r, s, c
+        int krsc_idx = k_out * (R * S * C) + r * (S * C) + s * C + c;
+
+        tile_kernel[tile_row][tile_col] = kernel[krsc_idx];
       } else {
         tile_kernel[tile_row][tile_col] = __float2half(0.0f);
       }
     }
 
-// Load im2col tile (fused)
+// Load im2col tile (row-major)
 #pragma unroll
-    for (int idx = 0; idx < (WMMA_K * TILE_SIZE); idx += BLOCK_SIZE) {
+    for (int idx = threadIdx.x; idx < (WMMA_K * TILE_SIZE); idx += BLOCK_SIZE) {
       int tile_row = idx / TILE_SIZE;
       int tile_col = idx % TILE_SIZE;
 
@@ -146,8 +138,7 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
         int in_w = out_w * stride - pad + s;
 
         if (in_h >= 0 && in_h < H && in_w >= 0 && in_w < W) {
-          int input_idx = ((n * C + c) * H + in_h) * W + in_w;
-          value = input[input_idx];
+          value = input[(n)*H * W * C + (in_h)*W * C + (in_w)*C + (c)];
         }
       }
 
@@ -164,10 +155,11 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
         int a_row = warp_row + i * WMMA_M;
         int b_col = warp_col + j * WMMA_N;
 
-        load_matrix_sync(a_frag, &tile_kernel[a_row][0], WMMA_K);
-        load_matrix_sync(b_frag, &tile_im2col[0][b_col], TILE_SIZE);
+        nvcuda::wmma::load_matrix_sync(a_frag, &tile_kernel[a_row][0], WMMA_K);
+        nvcuda::wmma::load_matrix_sync(b_frag, &tile_im2col[0][b_col],
+                                       TILE_SIZE);
 
-        mma_sync(c_frag[i][j], a_frag, b_frag, c_frag[i][j]);
+        nvcuda::wmma::mma_sync(c_frag[i][j], a_frag, b_frag, c_frag[i][j]);
       }
     }
 
@@ -183,8 +175,9 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
       int smem_col = warp_col + j * WMMA_N;
 
       // Store fragment to shared memory
-      store_matrix_sync(&tile_output[smem_row][smem_col], c_frag[i][j],
-                        TILE_SIZE, nvcuda::wmma::mem_row_major);
+      nvcuda::wmma::store_matrix_sync(&tile_output[smem_row][smem_col],
+                                      c_frag[i][j], TILE_SIZE,
+                                      nvcuda::wmma::mem_row_major);
     }
   }
 
@@ -192,7 +185,8 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
 
 // ===== Copy from shared memory to global memory =====
 #pragma unroll
-  for (int idx = 0; idx < (TILE_SIZE * TILE_SIZE); idx += BLOCK_SIZE) {
+  for (int idx = threadIdx.x; idx < (TILE_SIZE * TILE_SIZE);
+       idx += BLOCK_SIZE) {
     int tile_row = idx / TILE_SIZE;
     int tile_col = idx % TILE_SIZE;
 
@@ -208,18 +202,11 @@ __global__ void conv_im2col_NHWC_forward(const half* input,   // [N, C, H, W]
 
       // Write to global memory: output[N, K, H_out, W_out]
       int out_idx = ((n * K + out_k) * H_out + out_h) * W_out + out_w;
-      output[out_idx] = tile_output[tile_row][tile_col];
+      output[out_idx] = __half2float(tile_output[tile_row][tile_col]);
     }
   }
 }
 
-/*
-  @brief Convolution forward pass using im2col + WMMA + NHWC data layout.
-  @param input Pointer to input tensor [N, C, H, W]
-  @param kernel Pointer to kernel tensor [K, C, R, S]
-  @param output Pointer to output tensor [N, K, H_out, W_out]
-  @param params Convolution parameters
-*/
 void conv_forward(const float* input, const float* kernel, float* output,
                   const ConvParams& params) {
   size_t H_out = (params.H + 2 * params.pad - params.R) / params.stride + 1;
@@ -229,11 +216,9 @@ void conv_forward(const float* input, const float* kernel, float* output,
   dim3 grid((params.input_size() + NCHW_TO_NHWC_BLOCK_SIZE - 1) /
             NCHW_TO_NHWC_BLOCK_SIZE);
 
-  half *d_input_nhwc, *d_kernel_nhwc, *d_output_nhwc;
-  // Allocate device memory
+  half *d_input_nhwc, *d_kernel_nhwc;
   CUDA_CHECK(cudaMalloc(&d_input_nhwc, params.input_size() * sizeof(half)));
   CUDA_CHECK(cudaMalloc(&d_kernel_nhwc, params.kernel_size() * sizeof(half)));
-  CUDA_CHECK(cudaMalloc(&d_output_nhwc, params.output_size() * sizeof(half)));
 
   NCHW_to_NHWC<<<grid, block>>>(input, d_input_nhwc, params.N, params.C,
                                 params.H, params.W);
@@ -243,23 +228,15 @@ void conv_forward(const float* input, const float* kernel, float* output,
   NCHW_to_NHWC<<<grid, block>>>(kernel, d_kernel_nhwc, params.K, params.C,
                                 params.R, params.S);
 
-  // Grid and block dimensions
   block = dim3(BLOCK_SIZE);
-  grid = dim3((params.K + TILE_SIZE - 1) / TILE_SIZE,
-              ((params.N * H_out * W_out) + TILE_SIZE - 1) / TILE_SIZE);
+  grid = dim3(((params.N * H_out * W_out) + TILE_SIZE - 1) / TILE_SIZE),
+  (params.K + TILE_SIZE - 1) / TILE_SIZE;
   conv_im2col_NHWC_forward<<<grid, block>>>(
-      d_input_nhwc, d_kernel_nhwc, d_output_nhwc, params.N, params.C, params.H,
+      d_input_nhwc, d_kernel_nhwc, output, params.N, params.C, params.H,
       params.W, params.K, params.R, params.S, params.pad, params.stride, H_out,
       W_out);
 
-  block = dim3(NCHW_TO_NHWC_BLOCK_SIZE);
-  grid = dim3((params.output_size() + NCHW_TO_NHWC_BLOCK_SIZE - 1) /
-              NCHW_TO_NHWC_BLOCK_SIZE);
-  NHWC_to_NCHW<<<grid, block>>>(d_output_nhwc, output, params.N, params.K,
-                                H_out, W_out);
-
   CUDA_CHECK(cudaFree(d_input_nhwc));
   CUDA_CHECK(cudaFree(d_kernel_nhwc));
-  CUDA_CHECK(cudaFree(d_output_nhwc));
 }
 }  // namespace im2col_NHWC

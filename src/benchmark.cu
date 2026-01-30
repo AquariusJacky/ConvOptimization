@@ -21,6 +21,9 @@ void conv_forward(const float*, const float*, float*, const ConvParams&);
 namespace im2col_NHWC {
 void conv_forward(const float*, const float*, float*, const ConvParams&);
 }
+namespace im2col_NHWC_restrict {
+void conv_forward(const float*, const float*, float*, const ConvParams&);
+}
 
 int main(int argc, char** argv) {
   // Define problem size
@@ -35,13 +38,14 @@ int main(int argc, char** argv) {
   params.pad = 1;
   params.stride = 1;
 
+  // Report mode or comparison mode
   bool report_mode = false;
-  bool naive_gpu = false;
-  bool shared_gpu = false;
-  bool shared_both_gpu = false;
+  bool naive_gpu = true;
+  bool shared_gpu = true;
+  bool shared_both_gpu = true;
   bool im2col_gpu = true;
   bool im2col_NHWC_gpu = true;
-  bool cudnn = false;
+  bool cudnn = true;
 
   int warmup_iters, timing_iters;
   if (report_mode) {
@@ -62,9 +66,11 @@ int main(int argc, char** argv) {
          calculate_gflops(params, 1000.0f));  // GFLOPS at 1 second
 
   TimingResult cpu_result, naive_result, shared_result, shared_both_result,
-      im2col_result, im2col_NHWC_result, cudnn_result;
+      im2col_result, im2col_NHWC_result, im2col_NHWC_restrict_result,
+      cudnn_result;
   float *cpu_output, *naive_output, *shared_output, *shared_both_output,
-      *im2col_output, *im2col_NHWC_output, *cudnn_output;
+      *im2col_output, *im2col_NHWC_output, *im2col_NHWC_restrict_output,
+      *cudnn_output;
 
   // Benchmark CPU
   cpu_result = time_cpu_convolution(cpu::conv_forward, buffers);
@@ -107,7 +113,7 @@ int main(int argc, char** argv) {
   }
 
   if (im2col_gpu) {
-    // Shared_both GPU implementations
+    // im2col GPU implementations
     im2col_result = time_gpu_convolution(im2col::conv_forward, buffers,
                                          warmup_iters, timing_iters);
     float* im2col_output = new float[params.output_size()];
@@ -119,7 +125,7 @@ int main(int argc, char** argv) {
   }
 
   if (im2col_NHWC_gpu) {
-    // Shared_both GPU implementations
+    // im2col_NHWC GPU implementations
     im2col_NHWC_result = time_gpu_convolution(
         im2col_NHWC::conv_forward, buffers, warmup_iters, timing_iters);
     float* im2col_NHWC_output = new float[params.output_size()];

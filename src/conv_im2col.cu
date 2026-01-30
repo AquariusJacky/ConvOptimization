@@ -46,7 +46,7 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
   for (int i = 0; i < 2; i++) {
 #pragma unroll
     for (int j = 0; j < 2; j++) {
-      fill_fragment(c_frag[i][j], 0.0f);
+      nvcuda::wmma::fill_fragment(c_frag[i][j], 0.0f);
     }
   }
 
@@ -80,7 +80,7 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
       int crs_idx = k_block + tile_row;
       int spatial_idx = spatial_block_idx + tile_col;
 
-      half value;
+      half value = __float2half(0.0f);
 
       if (crs_idx < CRS && spatial_idx < N * H_out * W_out) {
         int c = crs_idx / (R * S);
@@ -99,8 +99,6 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
         if (in_h >= 0 && in_h < H && in_w >= 0 && in_w < W) {
           value = __float2half(
               input[(n)*C * H * W + (c)*H * W + (in_h)*W + (in_w)]);
-        } else {
-          value = __float2half(0.0f);
         }
       }
 
@@ -117,10 +115,11 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
         int a_row = warp_row + i * WMMA_M;
         int b_col = warp_col + j * WMMA_N;
 
-        load_matrix_sync(a_frag, &tile_kernel[a_row][0], WMMA_K);
-        load_matrix_sync(b_frag, &tile_im2col[0][b_col], TILE_SIZE);
+        nvcuda::wmma::load_matrix_sync(a_frag, &tile_kernel[a_row][0], WMMA_K);
+        nvcuda::wmma::load_matrix_sync(b_frag, &tile_im2col[0][b_col],
+                                       TILE_SIZE);
 
-        mma_sync(c_frag[i][j], a_frag, b_frag, c_frag[i][j]);
+        nvcuda::wmma::mma_sync(c_frag[i][j], a_frag, b_frag, c_frag[i][j]);
       }
     }
 
@@ -136,8 +135,9 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
       int smem_col = warp_col + j * WMMA_N;
 
       // Store fragment to shared memory
-      store_matrix_sync(&tile_output[smem_row][smem_col], c_frag[i][j],
-                        TILE_SIZE, nvcuda::wmma::mem_row_major);
+      nvcuda::wmma::store_matrix_sync(&tile_output[smem_row][smem_col],
+                                      c_frag[i][j], TILE_SIZE,
+                                      nvcuda::wmma::mem_row_major);
     }
   }
 
@@ -145,7 +145,8 @@ __global__ void conv_im2col_forward(const float* input,   // [N, C, H, W]
 
 // ===== Copy from shared memory to global memory =====
 #pragma unroll
-  for (int idx = 0; idx < (TILE_SIZE * TILE_SIZE); idx += BLOCK_SIZE) {
+  for (int idx = threadIdx.x; idx < (TILE_SIZE * TILE_SIZE);
+       idx += BLOCK_SIZE) {
     int tile_row = idx / TILE_SIZE;
     int tile_col = idx % TILE_SIZE;
 
@@ -185,8 +186,8 @@ void conv_forward(const float* input, const float* kernel, float* output,
   // So a total of 16 wmma calls from 4 warps per block
   // And 4 warps = 128 threads
   dim3 block(BLOCK_SIZE);
-  dim3 grid((params.K + TILE_SIZE - 1) / TILE_SIZE,
-            ((params.N * H_out * W_out) + TILE_SIZE - 1) / TILE_SIZE);
+  dim3 grid(((params.N * H_out * W_out) + TILE_SIZE - 1) / TILE_SIZE,
+            (params.K + TILE_SIZE - 1) / TILE_SIZE);
 
   conv_im2col_forward<<<grid, block>>>(
       input, kernel, output, params.N, params.C, params.H, params.W, params.K,

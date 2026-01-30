@@ -30,7 +30,7 @@ CUDA_SRC = $(SRC_DIR)/conv_naive.cu \
            $(SRC_DIR)/conv_shared.cu \
            $(SRC_DIR)/conv_shared_both.cu \
            $(SRC_DIR)/conv_im2col.cu \
-           $(SRC_DIR)/conv_im2col_NHWC.cu
+           $(SRC_DIR)/conv_im2col_NHWC.cu 
 MAIN_SRC = $(SRC_DIR)/benchmark.cu
 
 # Object files

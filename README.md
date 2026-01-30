@@ -37,14 +37,15 @@ Note: At this point probably try out im2col + gemm approach because ncu shows th
 
 Note 2: After I learned more about im2col, I found out that the previous methods were all thrown away. It's not an improvement over the   previous methods, it's a completely different approach. Hopefully this one will work better.
 
-### 6. im2col + Tensor core GPU + NCHW to NHWC conversion
+### 6. im2col + Tensor core + NCHW to NHWC conversion GPU
 Learning that NHWC layout decreases memory read uncoalesce, I attempted to do it by myself.
 
 Note: I am amazed by how fast im2col can be when implemented correctly. This implementation is an attempt to convert the input and kernel tensors from NCHW to NHWC format, then perform im2col + GEMM using WMMA. This should improve memory coalescing during the im2col step. The conversion kernels are simple and straightforward.
   
 Note 2: The main convolution kernel is similar to the previous im2col + WMMA kernel, except that the indexing for input tensor is changed to NHWC format. This should yield better performance due to improved memory access patterns.
   Note that the input and kernel tensors are converted to half-precision before being passed to the convolution kernel. This reduces memory bandwidth requirements and speeds up computation. The output tensor remains in single-precision for accuracy. Overall, this approach leverages the strengths of im2col and WMMA while optimizing memory access patterns through NHWC layout. Hopefully, this will lead to significant performance improvements.
-Note 3: (Spoiler, it didn't)
+
+Note 3: I made it. It's so much closer to cuDNN now.
 
 ### 7. cuDNN
 Comparison implementation using NVIDIA's cuDNN library. This serves as a benchmark against production-grade, highly optimized convolution implementations. Apparently, the speedup is not possible for me at my current level.
@@ -78,6 +79,8 @@ ncu ./bin/conv_benchmark
 nsys profile ./bin/conv_benchmark
 ```
 
+For ncu, you may use --set full and --skip-launch N to skip the warm up calls.
+
 ### Available Targets
 
 ```bash
@@ -101,9 +104,10 @@ make clean    # Remove build artifacts
 - Different algorithms (like im2col) can fundamentally change performance characteristics
 - Profiling tools like ncu are essential for understanding actual vs. expected performance
 - Roofline model is your friend.
+- NCHW vs NHWC in im2col plays a huge role
 
 ## Future Work
 
 - Add additional optimization techniques (e.g., register tiling, warp-level optimizations)
-- Add support for dilation parameter
 - Performance analysis across different input sizes and kernel configurations
+- Add support for dilation parameter
